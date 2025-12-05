@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useAccount, useConnect } from 'wagmi';
 import { useRouter } from 'next/navigation';
 import { apiService } from '@/lib/services/api';
+import { useWeb3 } from '@/lib/hooks/useWeb3';
 import Link from 'next/link';
 
 declare global {
@@ -14,25 +14,23 @@ declare global {
 
 export default function RegisterPage() {
   const router = useRouter();
-  const { address, isConnected } = useAccount();
-  const { connect, connectors, isPending: isConnecting } = useConnect();
+  const { account, isConnected, connect, isConnecting, isWalletAvailable, error: web3Error } = useWeb3();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    console.log('Connectors available:', connectors.map(c => ({ name: c.name, ready: c.ready })));
-    if (isConnected && address) {
+    if (isConnected && account) {
       checkRegistration();
     }
-  }, [isConnected, address, connectors]);
+  }, [isConnected, account]);
 
   const checkRegistration = async () => {
     try {
       // Try to register/get user
       const response = await apiService.register({
-        walletAddress: address!,
+        walletAddress: account!,
         name: name || undefined,
         email: email || undefined,
       });
@@ -52,46 +50,11 @@ export default function RegisterPage() {
   };
 
   const handleConnect = async () => {
-    try {
-      // Check if window.ethereum exists (MetaMask or other injected wallet)
-      if (typeof window !== 'undefined' && !window.ethereum) {
-        setError('No Web3 wallet detected. Please install MetaMask from https://metamask.io');
-        return;
-      }
-
-      if (connectors.length === 0) {
-        setError('No wallet connectors available. Please install MetaMask or refresh the page.');
-        return;
-      }
-
-      // Try to connect with the first available connector
-      const connector = connectors.find(c => c.ready) || connectors[0];
-      
-      if (!connector) {
-        setError('No wallet connector available. Please install MetaMask.');
-        return;
-      }
-
-      console.log('Attempting to connect with:', connector.name);
-
-      connect({ connector }, {
-        onError: (error) => {
-          console.error('Connection error:', error);
-          setError(error.message || 'Failed to connect wallet. Please make sure MetaMask is installed and unlocked.');
-        },
-        onSuccess: () => {
-          console.log('Wallet connected successfully');
-          setError(null);
-        },
-      });
-    } catch (err: any) {
-      console.error('Connect error:', err);
-      setError(err.message || 'Failed to connect wallet');
-    }
+    await connect();
   };
 
   const handleRegister = async () => {
-    if (!isConnected || !address) {
+    if (!isConnected || !account) {
       setError('Please connect your wallet first');
       return;
     }
@@ -101,7 +64,7 @@ export default function RegisterPage() {
       setError(null);
 
       const response = await apiService.register({
-        walletAddress: address,
+        walletAddress: account,
         name: name || undefined,
         email: email || undefined,
       });
@@ -130,13 +93,13 @@ export default function RegisterPage() {
 
         {!isConnected ? (
           <div>
-            {error && (
+            {(error || web3Error) && (
               <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
-                {error}
+                {error || web3Error}
               </div>
             )}
             
-            {connectors.length === 0 && (
+            {!isWalletAvailable && (
               <div className="mb-4 bg-yellow-50 border border-yellow-200 text-yellow-800 px-4 py-3 rounded-lg text-sm">
                 <p className="font-semibold mb-1">No wallet detected</p>
                 <p>Please install <a href="https://metamask.io" target="_blank" rel="noopener noreferrer" className="underline">MetaMask</a> or another Web3 wallet extension.</p>
@@ -145,17 +108,11 @@ export default function RegisterPage() {
 
             <button
               onClick={handleConnect}
-              disabled={connectors.length === 0 || isConnecting}
+              disabled={!isWalletAvailable || isConnecting}
               className="w-full px-4 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isConnecting ? 'Connecting...' : connectors.length === 0 ? 'No Wallet Found' : 'Connect Wallet'}
+              {isConnecting ? 'Connecting...' : !isWalletAvailable ? 'No Wallet Found' : 'Connect Wallet'}
             </button>
-
-            {connectors.length > 0 && (
-              <p className="mt-4 text-sm text-gray-500 text-center">
-                Available wallets: {connectors.map(c => c.name).join(', ')}
-              </p>
-            )}
           </div>
         ) : (
           <div className="space-y-4">
@@ -188,7 +145,7 @@ export default function RegisterPage() {
             <div className="bg-gray-50 p-4 rounded-lg">
               <p className="text-sm text-gray-600 mb-1">Connected Wallet:</p>
               <p className="text-sm font-mono text-gray-900 break-all">
-                {address}
+                {account}
               </p>
             </div>
 

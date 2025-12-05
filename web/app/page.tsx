@@ -1,9 +1,9 @@
 'use client';
 
-import { useAccount } from 'wagmi';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { apiService, UserProfile } from '@/lib/services/api';
+import { useWeb3 } from '@/lib/hooks/useWeb3';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 
@@ -13,7 +13,7 @@ const DisasterMap = dynamic(() => import('@/components/DisasterMap'), {
 });
 
 export default function Home() {
-  const { address, isConnected } = useAccount();
+  const { account, isConnected } = useWeb3();
   const router = useRouter();
   const [recipients, setRecipients] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);

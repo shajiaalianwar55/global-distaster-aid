@@ -1,18 +1,17 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useAccount, useWriteContract } from 'wagmi';
 import { useRouter, useParams } from 'next/navigation';
 import { apiService, UserProfile } from '@/lib/services/api';
 import { blockchainService } from '@/lib/services/blockchain';
-import { parseEther, parseUnits } from 'viem';
+import { useWeb3 } from '@/lib/hooks/useWeb3';
+import { ethers } from 'ethers';
 import Link from 'next/link';
 
 export default function DonatePage() {
   const router = useRouter();
   const params = useParams();
-  const { address, isConnected } = useAccount();
-  const { writeContract, isPending } = useWriteContract();
+  const { account, isConnected, signer } = useWeb3();
   const [recipient, setRecipient] = useState<UserProfile | null>(null);
   const [amount, setAmount] = useState('');
   const [token, setToken] = useState<'ETH' | 'USDC'>('ETH');
@@ -41,18 +40,28 @@ export default function DonatePage() {
   };
 
   const handleCryptoDonation = async () => {
-    if (!recipient || !amount || !address) {
-      setError('Please enter an amount');
+    if (!recipient || !amount || !account || !signer) {
+      setError('Please enter an amount and ensure wallet is connected');
       return;
     }
 
     try {
       setError(null);
-      // This would use wagmi's writeContract hook
-      // For now, showing a placeholder
-      alert('Crypto donation feature - integrate with wagmi writeContract');
+      setLoading(true);
+      
+      if (token === 'ETH') {
+        await blockchainService.donateNative(signer, recipient.walletAddress, amount);
+      } else {
+        await blockchainService.donateUSDC(signer, recipient.walletAddress, amount);
+      }
+      
+      setError(null);
+      alert('Donation successful!');
+      router.push('/');
     } catch (err: any) {
       setError(err.message || 'Donation failed');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -183,10 +192,10 @@ export default function DonatePage() {
 
         <button
           onClick={donationType === 'crypto' ? handleCryptoDonation : handleFiatDonation}
-          disabled={isPending || !amount}
+          disabled={loading || !amount}
           className="w-full px-4 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed mb-4"
         >
-          {isPending ? 'Processing...' : 'Donate'}
+          {loading ? 'Processing...' : 'Donate'}
         </button>
 
         <Link

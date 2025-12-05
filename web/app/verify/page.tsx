@@ -1,15 +1,15 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useAccount } from 'wagmi';
 import { useRouter } from 'next/navigation';
 import { useLocation } from '@/lib/hooks/useLocation';
+import { useWeb3 } from '@/lib/hooks/useWeb3';
 import { apiService } from '@/lib/services/api';
 import Link from 'next/link';
 
 export default function VerifyPage() {
   const router = useRouter();
-  const { address, isConnected } = useAccount();
+  const { account, isConnected } = useWeb3();
   const { getCurrentLocation, hasPermission, requestPermission, loading: locationLoading } = useLocation();
   const [verifying, setVerifying] = useState(false);
   const [verificationStatus, setVerificationStatus] = useState<'pending' | 'verified' | 'failed' | null>(null);
@@ -22,7 +22,7 @@ export default function VerifyPage() {
   }, [isConnected, router]);
 
   const handleVerify = async () => {
-    if (!address) {
+    if (!account) {
       return;
     }
 

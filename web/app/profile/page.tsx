@@ -1,17 +1,15 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useAccount, useDisconnect } from 'wagmi';
 import { useRouter } from 'next/navigation';
 import { apiService, UserProfile } from '@/lib/services/api';
 import { blockchainService } from '@/lib/services/blockchain';
-import { useReadContract, useWriteContract } from 'wagmi';
+import { useWeb3 } from '@/lib/hooks/useWeb3';
 import Link from 'next/link';
 
 export default function ProfilePage() {
   const router = useRouter();
-  const { address, isConnected } = useAccount();
-  const { disconnect } = useDisconnect();
+  const { account, isConnected, disconnect } = useWeb3();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [balance, setBalance] = useState<string>('0');
@@ -29,7 +27,7 @@ export default function ProfilePage() {
       setLoading(true);
       const userId = localStorage.getItem('userId');
       
-      if (!userId || !address) {
+      if (!userId || !account) {
         return;
       }
 
@@ -38,7 +36,7 @@ export default function ProfilePage() {
 
       // Load blockchain balance
       try {
-        const recipientBalance = await blockchainService.getRecipientBalance(address);
+        const recipientBalance = await blockchainService.getRecipientBalance(account);
         setBalance(recipientBalance);
       } catch (error) {
         console.error('Error loading balance:', error);
@@ -74,7 +72,7 @@ export default function ProfilePage() {
             </Link>
             <div className="flex items-center space-x-4">
               <span className="text-sm text-gray-600">
-                {address?.slice(0, 6)}...{address?.slice(-4)}
+                {account?.slice(0, 6)}...{account?.slice(-4)}
               </span>
             </div>
           </div>
@@ -91,7 +89,7 @@ export default function ProfilePage() {
                 Wallet Address
               </label>
               <p className="text-sm font-mono text-gray-900 break-all">
-                {address}
+                {account}
               </p>
             </div>
 
