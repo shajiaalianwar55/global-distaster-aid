@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { ethers } from 'ethers';
 import { BASE_SEPOLIA_CHAIN_ID, BASE_MAINNET_CHAIN_ID } from '@/lib/constants/config';
 
@@ -25,13 +25,118 @@ export function useWeb3() {
     error: null,
   });
 
+  // Track if listeners are registered to prevent duplicates
+  const listenersRegistered = useRef(false);
+  // Store handler functions in refs to avoid circular dependencies
+  const handleAccountsChangedRef = useRef<((accounts: string[]) => Promise<void>) | null>(null);
+  const handleChainChangedRef = useRef<(() => Promise<void>) | null>(null);
+  const removeListenersRef = useRef<(() => void) | null>(null);
+
   // Check if wallet is available
-  const isWalletAvailable = () => {
+  const isWalletAvailable = useCallback(() => {
     return typeof window !== 'undefined' && typeof window.ethereum !== 'undefined';
-  };
+  }, []);
+
+  // Remove all event listeners
+  const removeListeners = useCallback(() => {
+    if (typeof window !== 'undefined' && window.ethereum && listenersRegistered.current) {
+      if (handleAccountsChangedRef.current) {
+        window.ethereum.removeListener('accountsChanged', handleAccountsChangedRef.current);
+      }
+      if (handleChainChangedRef.current) {
+        window.ethereum.removeListener('chainChanged', handleChainChangedRef.current);
+      }
+      listenersRegistered.current = false;
+    }
+  }, []);
+
+  // Handle account changes
+  const handleAccountsChanged = useCallback(async (accounts: string[]) => {
+    if (accounts.length === 0) {
+      // User disconnected wallet - clean up listeners
+      if (removeListenersRef.current) {
+        removeListenersRef.current();
+      }
+      setState({
+        account: null,
+        provider: null,
+        signer: null,
+        chainId: null,
+        isConnected: false,
+        isConnecting: false,
+        error: null,
+      });
+    } else {
+      // Account changed, update state
+      try {
+        const provider = new ethers.BrowserProvider(window.ethereum);
+        const signer = await provider.getSigner();
+        const address = await signer.getAddress();
+        const network = await provider.getNetwork();
+        const chainId = Number(network.chainId);
+
+        setState((prev) => ({
+          ...prev,
+          account: address,
+          provider,
+          signer,
+          chainId,
+          isConnected: true,
+        }));
+      } catch (error: any) {
+        setState((prev) => ({
+          ...prev,
+          error: error.message || 'Failed to update account',
+        }));
+      }
+    }
+  }, []);
+
+  // Handle chain changes
+  const handleChainChanged = useCallback(async () => {
+    try {
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
+      const address = await signer.getAddress();
+      const network = await provider.getNetwork();
+      const chainId = Number(network.chainId);
+
+      setState((prev) => ({
+        ...prev,
+        provider,
+        signer,
+        chainId,
+      }));
+    } catch (error: any) {
+      setState((prev) => ({
+        ...prev,
+        error: error.message || 'Failed to update chain',
+      }));
+    }
+  }, []);
+
+  // Update refs when handlers change
+  useEffect(() => {
+    handleAccountsChangedRef.current = handleAccountsChanged;
+    handleChainChangedRef.current = handleChainChanged;
+    removeListenersRef.current = removeListeners;
+  }, [handleAccountsChanged, handleChainChanged, removeListeners]);
+
+  // Register event listeners (only once)
+  const registerListeners = useCallback(() => {
+    if (typeof window !== 'undefined' && window.ethereum && !listenersRegistered.current) {
+      if (handleAccountsChangedRef.current) {
+        window.ethereum.on('accountsChanged', handleAccountsChangedRef.current);
+      }
+      if (handleChainChangedRef.current) {
+        window.ethereum.on('chainChanged', handleChainChangedRef.current);
+      }
+      listenersRegistered.current = true;
+    }
+  }, []);
 
   // Connect wallet
-  const connect = async () => {
+  const connect = useCallback(async () => {
     if (!isWalletAvailable()) {
       setState((prev) => ({
         ...prev,
@@ -64,9 +169,8 @@ export function useWeb3() {
         error: null,
       });
 
-      // Listen for account changes
-      window.ethereum.on('accountsChanged', handleAccountsChanged);
-      window.ethereum.on('chainChanged', handleChainChanged);
+      // Register listeners only once when connecting
+      registerListeners();
     } catch (error: any) {
       setState((prev) => ({
         ...prev,
@@ -74,14 +178,11 @@ export function useWeb3() {
         error: error.message || 'Failed to connect wallet',
       }));
     }
-  };
+  }, [isWalletAvailable, registerListeners]);
 
   // Disconnect wallet
-  const disconnect = () => {
-    if (window.ethereum) {
-      window.ethereum.removeListener('accountsChanged', handleAccountsChanged);
-      window.ethereum.removeListener('chainChanged', handleChainChanged);
-    }
+  const disconnect = useCallback(() => {
+    removeListeners();
     setState({
       account: null,
       provider: null,
@@ -91,10 +192,10 @@ export function useWeb3() {
       isConnecting: false,
       error: null,
     });
-  };
+  }, [removeListeners]);
 
   // Switch to Base Sepolia network
-  const switchToBaseSepolia = async () => {
+  const switchToBaseSepolia = useCallback(async () => {
     if (!isWalletAvailable()) return;
 
     try {
@@ -123,21 +224,7 @@ export function useWeb3() {
         });
       }
     }
-  };
-
-  // Handle account changes
-  const handleAccountsChanged = (accounts: string[]) => {
-    if (accounts.length === 0) {
-      disconnect();
-    } else {
-      connect();
-    }
-  };
-
-  // Handle chain changes
-  const handleChainChanged = () => {
-    connect();
-  };
+  }, [isWalletAvailable]);
 
   // Check connection on mount
   useEffect(() => {
@@ -163,8 +250,8 @@ export function useWeb3() {
               error: null,
             });
 
-            window.ethereum.on('accountsChanged', handleAccountsChanged);
-            window.ethereum.on('chainChanged', handleChainChanged);
+            // Register listeners only once
+            registerListeners();
           }
         } catch (error) {
           // Silently fail if wallet is locked
@@ -174,13 +261,11 @@ export function useWeb3() {
       checkConnection();
     }
 
+    // Cleanup: remove listeners on unmount
     return () => {
-      if (window.ethereum) {
-        window.ethereum.removeListener('accountsChanged', handleAccountsChanged);
-        window.ethereum.removeListener('chainChanged', handleChainChanged);
-      }
+      removeListeners();
     };
-  }, []);
+  }, [isWalletAvailable, registerListeners, removeListeners]);
 
   return {
     ...state,
@@ -190,4 +275,3 @@ export function useWeb3() {
     isWalletAvailable: isWalletAvailable(),
   };
 }
-
