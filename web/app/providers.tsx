@@ -3,14 +3,14 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { WagmiProvider, createConfig, http } from 'wagmi';
 import { baseSepolia, base } from 'wagmi/chains';
-import { injected, metaMask } from 'wagmi/connectors';
+import { injected } from 'wagmi/connectors';
 import { useState } from 'react';
 
+// Web-only configuration - no mobile dependencies
 const config = createConfig({
   chains: [baseSepolia, base],
   connectors: [
-    injected({ target: 'metaMask' }),
-    metaMask(),
+    injected(), // Browser wallet connector (MetaMask, Coinbase Wallet, etc.)
   ],
   transports: {
     [baseSepolia.id]: http('https://sepolia.base.org'),

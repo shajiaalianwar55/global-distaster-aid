@@ -56,6 +56,17 @@ export default function DisasterMap() {
     // Dynamically import Leaflet only on client side
     const loadMap = async () => {
       try {
+        // Load CSS first using a link tag (web-compatible approach)
+        if (typeof window !== 'undefined' && !document.getElementById('leaflet-css')) {
+          const link = document.createElement('link');
+          link.id = 'leaflet-css';
+          link.rel = 'stylesheet';
+          link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+          link.integrity = 'sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=';
+          link.crossOrigin = '';
+          document.head.appendChild(link);
+        }
+
         const L = await import('leaflet');
         const { MapContainer, TileLayer, Marker, Popup } = await import('react-leaflet');
         
@@ -66,11 +77,6 @@ export default function DisasterMap() {
           iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
           shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
         });
-
-        // Import CSS - use require for CSS files
-        if (typeof window !== 'undefined') {
-          require('leaflet/dist/leaflet.css');
-        }
 
         setMapComponent({ MapContainer, TileLayer, Marker, Popup, L: L.default });
         setIsLoading(false);

@@ -7,7 +7,7 @@ const nextConfig = {
     NEXT_PUBLIC_BADGE_CONTRACT: process.env.NEXT_PUBLIC_BADGE_CONTRACT || '',
   },
   webpack: (config, { isServer }) => {
-    // Fix for MetaMask SDK trying to use React Native packages
+    // Fix for MetaMask SDK trying to use React Native packages (web-only)
     if (!isServer) {
       config.resolve.fallback = {
         ...config.resolve.fallback,
